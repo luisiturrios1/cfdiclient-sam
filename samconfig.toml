@@ -9,3 +9,14 @@ region = "us-east-1"
 confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 image_repositories = []
+
+[default]
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "cfdiclient-sam"
+s3_bucket = "aws-sam-cli-managed-default-samclisourcebucket-161m4yjuys1mc"
+s3_prefix = "cfdiclient-sam"
+region = "us-east-1"
+confirm_changeset = true
+capabilities = "CAPABILITY_IAM"
+image_repositories = []

@@ -1,0 +1,130 @@
+{
+  "Comment": "Descargar comprobantes desde el SAT",
+  "StartAt": "Solicitar descarga",
+  "States": {
+    "Solicitar descarga": {
+      "Type": "Task",
+      "Resource": "${SolicitaDescargaFunctionArn}",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "ResultPath": "$.solicita_descarga",
+      "Next": "Esperar 5"
+    },
+    "Esperar 5": {
+      "Type": "Wait",
+      "Next": "Verificar descarga",
+      "Seconds": 5
+    },
+    "Verificar descarga": {
+      "Type": "Task",
+      "Resource": "${VerificarDescargaFunctionArn}",
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "States.TaskFailed"
+          ],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 1.5
+        }
+      ],
+      "ResultPath": "$.verifica_descarga",
+      "Next": "Esta completada"
+    },
+    "Esta completada": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Or": [
+            {
+              "Variable": "$.verifica_descarga.estado_solicitud",
+              "StringEquals": "1"
+            },
+            {
+              "Variable": "$.verifica_descarga.estado_solicitud",
+              "StringEquals": "2"
+            }
+          ],
+          "Next": "Esperar 5",
+          "Comment": "Aceptada/EnProceso"
+        },
+        {
+          "Variable": "$.verifica_descarga.estado_solicitud",
+          "StringEquals": "3",
+          "Next": "Por cada paquete",
+          "Comment": "Terminada"
+        }
+      ],
+      "Default": "Validar razon de fallo"
+    },
+    "Validar razon de fallo": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.verifica_descarga.codigo_estado_solicitud",
+          "StringEquals": "5004",
+          "Next": "SuccesNoData",
+          "Comment": "504 No se encontro la informacion"
+        },
+        {
+          "Variable": "$.verifica_descarga.codigo_estado_solicitud",
+          "StringEquals": "404",
+          "Next": "Esperar 5",
+          "Comment": "404 Error no Controlado"
+        }
+      ],
+      "Default": "Fail"
+    },
+    "SuccesNoData": {
+      "Type": "Succeed"
+    },
+    "Fail": {
+      "Type": "Fail"
+    },
+    "Por cada paquete": {
+      "Type": "Map",
+      "Iterator": {
+        "StartAt": "Descargar paquete",
+        "States": {
+          "Descargar paquete": {
+            "Type": "Task",
+            "Resource": "${DescargarPaqueteFunctionArn}",
+            "Retry": [
+              {
+                "ErrorEquals": [
+                  "States.TaskFailed"
+                ],
+                "IntervalSeconds": 2,
+                "MaxAttempts": 3,
+                "BackoffRate": 1
+              }
+            ],
+            "ResultPath": "$.descargar_paquete",
+            "End": true
+          }
+        }
+      },
+      "ItemsPath": "$.verifica_descarga.paquetes",
+      "Next": "SuccessData",
+      "ResultPath": "$.verifica_descarga.paquete",
+      "Parameters": {
+        "rfc.$": "$.rfc",
+        "paquete.$": "$$.Map.Item.Value",
+        "fiel_cer.$": "$.fiel_cer",
+        "fiel_key.$": "$.fiel_key",
+        "fiel_pass.$": "$.fiel_pass"
+      }
+    },
+    "SuccessData": {
+      "Type": "Succeed"
+    }
+  }
+}

@@ -11,77 +11,89 @@ Globals:
     Tracing: Active
 
 Resources:
-  StockTradingStateMachine:
-    Type: AWS::Serverless::StateMachine # More info about State Machine Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-statemachine.html
+  CfdiClientStateMachine:
+    Type: AWS::Serverless::StateMachine
     Properties:
-      DefinitionUri: statemachine/stock_trader.asl.json
+      DefinitionUri: statemachine/cfdiclient.asl.json
       DefinitionSubstitutions:
-        StockCheckerFunctionArn: !GetAtt StockCheckerFunction.Arn
-        StockSellerFunctionArn: !GetAtt StockSellerFunction.Arn
-        StockBuyerFunctionArn: !GetAtt StockBuyerFunction.Arn
-        DDBPutItem: !Sub arn:${AWS::Partition}:states:::dynamodb:putItem
-        DDBTable: !Ref TransactionTable
+        SolicitaDescargaFunctionArn: !GetAtt SolicitaDescargaFunction.Arn
+        VerificarDescargaFunctionArn: !GetAtt VerificarDescargaFunction.Arn
+        DescargarPaqueteFunctionArn: !GetAtt DescargarPaqueteFunction.Arn
+      Policies:
+        - LambdaInvokePolicy:
+            FunctionName: !Ref SolicitaDescargaFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref VerificarDescargaFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref DescargarPaqueteFunction
+
+  SolicitaDescargaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/solicita_descarga/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 10
+      Architectures:
+        - x86_64
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: cfdiclient-sam
+
+  VerificarDescargaFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/verificar_descarga/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 10
+      Architectures:
+        - x86_64
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: cfdiclient-sam
+
+  DescargarPaqueteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/descargar_paquete/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 10
+      Architectures:
+        - x86_64
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: cfdiclient-sam
+  
+  SolicitaDescargaApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: functions/solicita_descarga_api/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Timeout: 10
+      Architectures:
+        - x86_64
+      Policies:
+        - S3FullAccessPolicy:
+            BucketName: cfdiclient-sam
+        - StepFunctionsExecutionPolicy:
+            StateMachineName: !Ref CfdiClientStateMachine
       Events:
-        HourlyTradingSchedule:
-          Type: Schedule # More info about Schedule Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-statemachine-schedule.html
+        CfdiClient:
+          Type: Api
           Properties:
-            Description: Schedule to run the stock trading state machine every hour
-            Enabled: False # This schedule is disabled by default to avoid incurring charges.
-            Schedule: "rate(1 hour)"
-      Policies: # Find out more about SAM policy templates: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/serverless-policy-templates.html
-        - LambdaInvokePolicy:
-            FunctionName: !Ref StockCheckerFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref StockSellerFunction
-        - LambdaInvokePolicy:
-            FunctionName: !Ref StockBuyerFunction
-        - DynamoDBWritePolicy:
-            TableName: !Ref TransactionTable
-
-  StockCheckerFunction:
-    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
-    Properties:
-      CodeUri: functions/stock_checker/
-      Handler: app.lambda_handler
-      Runtime: python3.9
-      Architectures:
-        - x86_64
-
-  StockSellerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: functions/stock_seller/
-      Handler: app.lambda_handler
-      Runtime: python3.9
-      Architectures:
-        - x86_64
-
-  StockBuyerFunction:
-    Type: AWS::Serverless::Function
-    Properties:
-      CodeUri: functions/stock_buyer/
-      Handler: app.lambda_handler
-      Runtime: python3.9
-      Architectures:
-        - x86_64
-
-  TransactionTable:
-    Type: AWS::Serverless::SimpleTable # More info about SimpleTable Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-simpletable.html
-    Properties:
-      PrimaryKey:
-        Name: Id
-        Type: String
-      ProvisionedThroughput:
-        ReadCapacityUnits: 1
-        WriteCapacityUnits: 1
+            Path: /solicita-descarga
+            Method: post
 
 Outputs:
   # StockTradingStateMachineHourlyTradingSchedule is an implicit Schedule event rule created out of Events key under Serverless::StateMachine
   # Find out more about other implicit resources you can reference within SAM
   # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-generated-resources.html
-  StockTradingStateMachineArn:
-    Description: "Stock Trading State machine ARN"
-    Value: !Ref StockTradingStateMachine
-  StockTradingStateMachineRoleArn:
-    Description: "IAM Role created for Stock Trading State machine based on the specified SAM Policy Templates"
-    Value: !GetAtt StockTradingStateMachineRole.Arn
+  CfdiClientStateMachineArn:
+    Description: "State machine ARN"
+    Value: !Ref CfdiClientStateMachine
+  CfdiClientStateMachineRoleArn:
+    Description: "IAM Role created for State machine based on the specified SAM Policy Templates"
+    Value: !GetAtt CfdiClientStateMachineRole.Arn
