@@ -38,7 +38,10 @@ Resources:
         - x86_64
       Policies:
         - S3FullAccessPolicy:
-            BucketName: cfdiclient-sam
+            BucketName: cfdi-masivo
+      Environment:
+        Variables:
+          BUCKET_NAME: cfdi-masivo
 
   VerificarDescargaFunction:
     Type: AWS::Serverless::Function
@@ -51,7 +54,10 @@ Resources:
         - x86_64
       Policies:
         - S3FullAccessPolicy:
-            BucketName: cfdiclient-sam
+            BucketName: cfdi-masivo
+      Environment:
+        Variables:
+          BUCKET_NAME: cfdi-masivo
 
   DescargarPaqueteFunction:
     Type: AWS::Serverless::Function
@@ -64,7 +70,10 @@ Resources:
         - x86_64
       Policies:
         - S3FullAccessPolicy:
-            BucketName: cfdiclient-sam
+            BucketName: cfdi-masivo
+      Environment:
+        Variables:
+          BUCKET_NAME: cfdi-masivo
   
   SolicitaDescargaApiFunction:
     Type: AWS::Serverless::Function
@@ -77,15 +86,19 @@ Resources:
         - x86_64
       Policies:
         - S3FullAccessPolicy:
-            BucketName: cfdiclient-sam
+            BucketName: cfdi-masivo
         - StepFunctionsExecutionPolicy:
-            StateMachineName: !Ref CfdiClientStateMachine
+            StateMachineName: !GetAtt CfdiClientStateMachine.Name
       Events:
         CfdiClient:
           Type: Api
           Properties:
             Path: /solicita-descarga
             Method: post
+      Environment:
+        Variables:
+          BUCKET_NAME: cfdi-masivo
+          STATE_MACHINE_ARN: !Ref CfdiClientStateMachine
 
 Outputs:
   # StockTradingStateMachineHourlyTradingSchedule is an implicit Schedule event rule created out of Events key under Serverless::StateMachine

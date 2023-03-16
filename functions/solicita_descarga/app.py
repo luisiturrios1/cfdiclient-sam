@@ -1,10 +1,11 @@
 import logging
+import os
 
 import boto3
 import dateutil
 from cfdiclient import Autenticacion, Fiel, SolicitaDescarga
 
-BUCKET_NAME = 'cfdiclient-sam'
+BUCKET_NAME = os.getenv('BUCKET_NAME')
 
 client = boto3.client('s3')
 

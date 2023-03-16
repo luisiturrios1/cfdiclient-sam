@@ -1,11 +1,12 @@
 import base64
 import json
+import os
 import uuid
 
 import boto3
 
-BUCKET_NAME = 'cfdiclient-sam'
-STATE_MACHINE_ARN = 'arn:aws:states:us-east-1:060622721368:stateMachine:CfdiClientStateMachine-Ci26YnFSCa4u'
+BUCKET_NAME = os.getenv('BUCKET_NAME')
+STATE_MACHINE_ARN = os.getenv('STATE_MACHINE_ARN')
 
 stepfunctions = boto3.client('stepfunctions')
 s3 = boto3.resource('s3')
