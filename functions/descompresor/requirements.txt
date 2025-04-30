@@ -1,2 +1,1 @@
 aws-lambda-powertools==2.37.0
-cfdiclient==1.5.9

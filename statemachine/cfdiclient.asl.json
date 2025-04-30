@@ -1,130 +1,321 @@
 {
-  "Comment": "Descargar comprobantes desde el SAT",
-  "StartAt": "Solicitar descarga",
-  "States": {
-    "Solicitar descarga": {
-      "Type": "Task",
-      "Resource": "${SolicitaDescargaFunctionArn}",
-      "Retry": [
-        {
-          "ErrorEquals": [
-            "States.TaskFailed"
-          ],
-          "IntervalSeconds": 5,
-          "MaxAttempts": 2,
-          "BackoffRate": 1.5
-        }
-      ],
-      "ResultPath": "$.solicita_descarga",
-      "Next": "Esperar 5"
-    },
-    "Esperar 5": {
-      "Type": "Wait",
-      "Next": "Verificar descarga",
-      "Seconds": 5
-    },
-    "Verificar descarga": {
-      "Type": "Task",
-      "Resource": "${VerificarDescargaFunctionArn}",
-      "Retry": [
-        {
-          "ErrorEquals": [
-            "States.TaskFailed"
-          ],
-          "IntervalSeconds": 5,
-          "MaxAttempts": 2,
-          "BackoffRate": 1.5
-        }
-      ],
-      "ResultPath": "$.verifica_descarga",
-      "Next": "Esta completada"
-    },
-    "Esta completada": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Or": [
-            {
-              "Variable": "$.verifica_descarga.estado_solicitud",
-              "StringEquals": "1"
-            },
-            {
-              "Variable": "$.verifica_descarga.estado_solicitud",
-              "StringEquals": "2"
-            }
-          ],
-          "Next": "Esperar 5",
-          "Comment": "Aceptada/EnProceso"
-        },
-        {
-          "Variable": "$.verifica_descarga.estado_solicitud",
-          "StringEquals": "3",
-          "Next": "Por cada paquete",
-          "Comment": "Terminada"
-        }
-      ],
-      "Default": "Validar razon de fallo"
-    },
-    "Validar razon de fallo": {
-      "Type": "Choice",
-      "Choices": [
-        {
-          "Variable": "$.verifica_descarga.codigo_estado_solicitud",
-          "StringEquals": "5004",
-          "Next": "SuccesNoData",
-          "Comment": "504 No se encontro la informacion"
-        },
-        {
-          "Variable": "$.verifica_descarga.codigo_estado_solicitud",
-          "StringEquals": "404",
-          "Next": "Esperar 5",
-          "Comment": "404 Error no Controlado"
-        }
-      ],
-      "Default": "Fail"
-    },
-    "SuccesNoData": {
-      "Type": "Succeed"
-    },
-    "Fail": {
-      "Type": "Fail"
-    },
-    "Por cada paquete": {
-      "Type": "Map",
-      "Iterator": {
-        "StartAt": "Descargar paquete",
-        "States": {
-          "Descargar paquete": {
-            "Type": "Task",
-            "Resource": "${DescargarPaqueteFunctionArn}",
-            "Retry": [
-              {
-                "ErrorEquals": [
-                  "States.TaskFailed"
-                ],
-                "IntervalSeconds": 2,
-                "MaxAttempts": 3,
-                "BackoffRate": 1
-              }
-            ],
-            "ResultPath": "$.descargar_paquete",
-            "End": true
-          }
-        }
-      },
-      "ItemsPath": "$.verifica_descarga.paquetes",
-      "Next": "SuccessData",
-      "ResultPath": "$.verifica_descarga.paquete",
-      "Parameters": {
-        "rfc.$": "$.rfc",
-        "paquete.$": "$$.Map.Item.Value",
-        "fiel_cer.$": "$.fiel_cer",
-        "fiel_key.$": "$.fiel_key",
-        "fiel_pass.$": "$.fiel_pass"
-      }
-    },
-    "SuccessData": {
-      "Type": "Succeed"
-    }
-  }
+	"Comment": "Descargar comprobantes desde el SAT",
+	"TimeoutSeconds": 86400,
+	"StartAt": "Inicializar contador",
+	"States": {
+		"Inicializar contador": {
+			"Type": "Pass",
+			"Result": {
+				"segundos": 30,
+				"aumentar": 30
+			},
+			"ResultPath": "$.contador",
+			"Next": "Solicitar descarga"
+		},
+		"Solicitar descarga": {
+			"Type": "Task",
+			"Resource": "${SolicitaDescargaFunctionArn}",
+			"Retry": [
+				{
+					"ErrorEquals": [
+						"States.TaskFailed"
+					],
+					"IntervalSeconds": 30,
+					"MaxAttempts": 2,
+					"BackoffRate": 1.5
+				}
+			],
+			"ResultPath": "$.solicita_descarga",
+			"Next": "Poner empresa en proceso"
+		},
+		"Poner empresa en proceso": {
+			"Type": "Choice",
+			"Choices": [
+				{
+					"Variable": "$.rfc_receptor",
+					"IsPresent": true,
+					"Next": "Poner procesando_recibidos"
+				},
+				{
+					"Variable": "$.rfc_emisor",
+					"IsPresent": true,
+					"Next": "Poner procesando_emitidos"
+				}
+			]
+		},
+		"Poner procesando_recibidos": {
+			"Type": "Task",
+			"Resource": "arn:aws:states:::dynamodb:updateItem",
+			"Parameters": {
+				"TableName": "${EmpresaDBTable}",
+				"Key": {
+					"rfc": {
+						"S.$": "$.rfc"
+					}
+				},
+				"UpdateExpression": "SET procesando_recibidos = :procesando_recibidos",
+				"ExpressionAttributeValues": {
+					":procesando_recibidos": {
+						"BOOL": true
+					}
+				},
+				"ReturnValues": "NONE"
+			},
+			"ResultPath": "$.enprocesso",
+			"Next": "Esperar"
+		},
+		"Poner procesando_emitidos": {
+			"Type": "Task",
+			"Resource": "arn:aws:states:::dynamodb:updateItem",
+			"Parameters": {
+				"TableName": "${EmpresaDBTable}",
+				"Key": {
+					"rfc": {
+						"S.$": "$.rfc"
+					}
+				},
+				"UpdateExpression": "SET procesando_emitidos = :procesando_emitidos",
+				"ExpressionAttributeValues": {
+					":procesando_emitidos": {
+						"BOOL": true
+					}
+				},
+				"ReturnValues": "NONE"
+			},
+			"ResultPath": "$.enprocesso",
+			"Next": "Esperar"
+		},
+		"Esperar": {
+			"Type": "Wait",
+			"Next": "Aumentar contador",
+			"SecondsPath": "$.contador.segundos"
+		},
+		"Aumentar contador": {
+			"Type": "Pass",
+			"Parameters": {
+				"segundos.$": "States.MathAdd($.contador.segundos, $.contador.aumentar)",
+				"aumentar.$": "States.MathAdd($.contador.aumentar, 30)"
+			},
+			"ResultPath": "$.contador",
+			"Next": "Verificar descarga"
+		},
+		"Verificar descarga": {
+			"Type": "Task",
+			"Resource": "${VerificarDescargaFunctionArn}",
+			"Retry": [
+				{
+					"ErrorEquals": [
+						"States.TaskFailed"
+					],
+					"IntervalSeconds": 30,
+					"MaxAttempts": 2,
+					"BackoffRate": 1.5
+				}
+			],
+			"ResultPath": "$.verifica_descarga",
+			"Next": "Esta completada"
+		},
+		"Esta completada": {
+			"Type": "Choice",
+			"Choices": [
+				{
+					"Or": [
+						{
+							"Variable": "$.verifica_descarga.estado_solicitud",
+							"StringEquals": "0"
+						},
+						{
+							"Variable": "$.verifica_descarga.estado_solicitud",
+							"StringEquals": "1"
+						},
+						{
+							"Variable": "$.verifica_descarga.estado_solicitud",
+							"StringEquals": "2"
+						}
+					],
+					"Next": "Esperar"
+				},
+				{
+					"Variable": "$.verifica_descarga.estado_solicitud",
+					"StringEquals": "3",
+					"Next": "Por cada paquete"
+				}
+			],
+			"Default": "Finalizo sin datos"
+		},
+		"Por cada paquete": {
+			"Type": "Map",
+			"Iterator": {
+				"StartAt": "Descargar paquete",
+				"States": {
+					"Descargar paquete": {
+						"Type": "Task",
+						"Resource": "${DescargarPaqueteFunctionArn}",
+						"Retry": [
+							{
+								"ErrorEquals": [
+									"States.TaskFailed"
+								],
+								"IntervalSeconds": 30,
+								"MaxAttempts": 3,
+								"BackoffRate": 1
+							}
+						],
+						"ResultPath": "$.descargar_paquete",
+						"End": true
+					}
+				}
+			},
+			"ItemsPath": "$.verifica_descarga.paquetes",
+			"Next": "Actualizar ultima_descarga",
+			"ResultPath": "$.verifica_descarga.paquete",
+			"Parameters": {
+				"rfc.$": "$.rfc",
+				"paquete.$": "$$.Map.Item.Value",
+				"id_solicitud.$": "$.solicita_descarga.id_solicitud",
+				"fecha_final.$": "$.fecha_final",
+				"fiel_cer.$": "$.fiel_cer",
+				"fiel_key.$": "$.fiel_key",
+				"fiel_pass.$": "$.fiel_pass"
+			}
+		},
+		"Actualizar ultima_descarga": {
+			"Type": "Choice",
+			"Choices": [
+				{
+					"Variable": "$.rfc_receptor",
+					"IsPresent": true,
+					"Next": "Actualizar ultima_descarga_recibidos"
+				},
+				{
+					"Variable": "$.rfc_emisor",
+					"IsPresent": true,
+					"Next": "Actualizar ultima_descarga_emitidos"
+				}
+			]
+		},
+		"Actualizar ultima_descarga_recibidos": {
+			"Type": "Task",
+			"Resource": "arn:aws:states:::dynamodb:updateItem",
+			"Parameters": {
+				"TableName": "${EmpresaDBTable}",
+				"Key": {
+					"rfc": {
+						"S.$": "$.rfc"
+					}
+				},
+				"UpdateExpression": "SET procesando_recibidos = :procesando_recibidos, ultima_descarga_recibidos = :ultima_descarga_recibidos",
+				"ExpressionAttributeValues": {
+					":procesando_recibidos": {
+						"BOOL": false
+					},
+					":ultima_descarga_recibidos": {
+						"S.$": "$.fecha_final"
+					}
+				},
+				"ReturnValues": "NONE"
+			},
+			"ResultPath": "$.removeInprocess",
+			"Next": "Succeed"
+		},
+		"Actualizar ultima_descarga_emitidos": {
+			"Type": "Task",
+			"Resource": "arn:aws:states:::dynamodb:updateItem",
+			"Parameters": {
+				"TableName": "${EmpresaDBTable}",
+				"Key": {
+					"rfc": {
+						"S.$": "$.rfc"
+					}
+				},
+				"UpdateExpression": "SET procesando_emitidos = :procesando_emitidos, ultima_descarga_emitidos = :ultima_descarga_emitidos",
+				"ExpressionAttributeValues": {
+					":procesando_emitidos": {
+						"BOOL": false
+					},
+					":ultima_descarga_emitidos": {
+						"S.$": "$.fecha_final"
+					}
+				},
+				"ReturnValues": "NONE"
+			},
+			"ResultPath": "$.removeInprocess",
+			"Next": "Succeed"
+		},
+		"Finalizo sin datos": {
+			"Type": "Choice",
+			"Choices": [
+				{
+					"Variable": "$.verifica_descarga.codigo_estado_solicitud",
+					"StringEquals": "5004",
+					"Next": "Actualizar ultima_descarga",
+					"Comment": "504 No se encontro la informacion"
+				}
+			],
+			"Default": "Quitar empresa en proceso"
+		},
+		"Quitar empresa en proceso": {
+			"Type": "Choice",
+			"Choices": [
+				{
+					"Variable": "$.rfc_receptor",
+					"IsPresent": true,
+					"Next": "Quitar procesando_recibidos"
+				},
+				{
+					"Variable": "$.rfc_emisor",
+					"IsPresent": true,
+					"Next": "Quitar procesando_emitidos"
+				}
+			]
+		},
+		"Quitar procesando_recibidos": {
+			"Type": "Task",
+			"Resource": "arn:aws:states:::dynamodb:updateItem",
+			"Parameters": {
+				"TableName": "${EmpresaDBTable}",
+				"Key": {
+					"rfc": {
+						"S.$": "$.rfc"
+					}
+				},
+				"UpdateExpression": "SET procesando_recibidos = :procesando_recibidos",
+				"ExpressionAttributeValues": {
+					":procesando_recibidos": {
+						"BOOL": false
+					}
+				},
+				"ReturnValues": "NONE"
+			},
+			"ResultPath": "$.removeInprocess",
+			"Next": "Fail"
+		},
+		"Quitar procesando_emitidos": {
+			"Type": "Task",
+			"Resource": "arn:aws:states:::dynamodb:updateItem",
+			"Parameters": {
+				"TableName": "${EmpresaDBTable}",
+				"Key": {
+					"rfc": {
+						"S.$": "$.rfc"
+					}
+				},
+				"UpdateExpression": "SET procesando_emitidos = :procesando_emitidos",
+				"ExpressionAttributeValues": {
+					":procesando_emitidos": {
+						"BOOL": false
+					}
+				},
+				"ReturnValues": "NONE"
+			},
+			"ResultPath": "$.removeInprocess",
+			"Next": "Fail"
+		},
+		"Fail": {
+			"Type": "Fail"
+		},
+		"Succeed": {
+			"Type": "Succeed"
+		}
+	}
 }

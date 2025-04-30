@@ -1,12 +1,17 @@
 import logging
+import os
 
 import boto3
 import dateutil
+from aws_lambda_powertools import Logger
 from cfdiclient import Autenticacion, Fiel, SolicitaDescarga
 
-BUCKET_NAME = 'cfdiclient-sam'
+FIRMAS_BUCKET_NAME = os.environ.get("FIRMAS_BUCKET_NAME")
 
 client = boto3.client('s3')
+
+
+logger = Logger()
 
 
 def get_token(fiel_cer: str, fiel_key: str, fiel_pass: str):
@@ -19,10 +24,11 @@ def get_token(fiel_cer: str, fiel_key: str, fiel_pass: str):
 
 
 def read_file(key: str):
-    response = client.get_object(Bucket=BUCKET_NAME, Key=key,)
+    response = client.get_object(Bucket=FIRMAS_BUCKET_NAME, Key=key,)
     return response["Body"].read()
 
 
+@logger.inject_lambda_context
 def lambda_handler(event, context):
     """Sample Lambda function which mocks the operation of buying a random number
     of shares for a stock.
@@ -64,5 +70,7 @@ def lambda_handler(event, context):
         rfc_emisor=rfc_emisor,
         tipo_solicitud=tipo_solicitud
     )
+
+    logger.info(solicitud)
 
     return solicitud

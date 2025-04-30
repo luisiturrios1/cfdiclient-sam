@@ -1,11 +1,15 @@
 import base64
 import logging
+import os
 
 import boto3
+from aws_lambda_powertools import Logger
 from cfdiclient import Autenticacion, DescargaMasiva, Fiel
 
-BUCKET_NAME = 'cfdiclient-sam'
+FIRMAS_BUCKET_NAME = os.environ.get("FIRMAS_BUCKET_NAME")
+DESCARGAS_BUCKET_NAME = os.environ.get("DESCARGAS_BUCKET_NAME")
 
+logger = Logger()
 client = boto3.client('s3')
 
 
@@ -19,10 +23,11 @@ def get_token(fiel_cer: str, fiel_key: str, fiel_pass: str):
 
 
 def read_file(key: str):
-    response = client.get_object(Bucket=BUCKET_NAME, Key=key,)
+    response = client.get_object(Bucket=FIRMAS_BUCKET_NAME, Key=key,)
     return response["Body"].read()
 
 
+@logger.inject_lambda_context
 def lambda_handler(event, context):
     """Sample Lambda function which mocks the operation of buying a random number
     of shares for a stock.
@@ -44,9 +49,13 @@ def lambda_handler(event, context):
     """
     rfc = event["rfc"]
     paquete = event["paquete"]
+    id_solicitud = event["id_solicitud"]
+    fecha_final = event["fecha_final"]
     fiel_cer = event["fiel_cer"]
     fiel_key = event["fiel_key"]
     fiel_pass = event["fiel_pass"]
+
+    logger.info(paquete)
 
     fiel, token = get_token(fiel_cer, fiel_key, fiel_pass)
 
@@ -58,11 +67,11 @@ def lambda_handler(event, context):
         logging.info(descarga)
         exit(1)
 
-    s3_key = f'paquetes/{paquete}.zip'
+    s3_key = f'{rfc}/{fecha_final[:10]}/{id_solicitud}/{paquete}.zip'
 
     client.put_object(
         Body=base64.b64decode(descarga["paquete_b64"]),
-        Bucket=BUCKET_NAME,
+        Bucket=DESCARGAS_BUCKET_NAME,
         Key=s3_key
     )
 
